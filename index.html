@@ -3,8 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Conciliação Financeira · Offline (Corrigida)</title>
+<title>Conciliação Financeira · Offline (GitHub Pages)</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
@@ -45,23 +46,22 @@
   .btn-export { background: var(--surface2); border: 0.5px solid var(--border2); border-radius: 8px; padding: 5px 12px; font-family: var(--mono); font-size: 11px; color: var(--text2); cursor: pointer; }
   .btn-export:hover { border-color: var(--accent); color: var(--accent); }
   .relatorio-box { background: var(--surface); border: 0.5px solid var(--border); border-radius: 16px; padding: 1.6rem; max-height: 550px; overflow-y: auto; font-size: 13px; line-height: 1.6; scrollbar-width: thin; }
-  .relatorio-box h1 { font-size: 18px; font-weight: 600; margin: 1rem 0 0.5rem; }
-  .relatorio-box h2 { font-size: 15px; font-weight: 500; margin: 1rem 0 0.5rem; border-left: 3px solid var(--accent); padding-left: 10px; }
+  .relatorio-box h1, .relatorio-box h2, .relatorio-box h3 { margin-top: 1rem; }
   .relatorio-box table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 11.5px; font-family: var(--mono); }
   .relatorio-box th, .relatorio-box td { padding: 6px 8px; border: 0.5px solid var(--border2); text-align: left; }
-  .relatorio-box th { background: var(--surface2); font-weight: 500; color: var(--text2); }
+  .relatorio-box th { background: var(--surface2); }
   .btn-reset { background: none; border: none; font-family: var(--mono); font-size: 12px; color: var(--text3); cursor: pointer; margin-top: 0.8rem; display: inline-flex; align-items: center; gap: 6px; }
   .btn-reset:hover { color: var(--text2); }
   .error-box { background: var(--red-bg); border: 0.5px solid #ab3a3a; border-radius: 12px; padding: 14px; color: #ff8888; white-space: pre-wrap; }
-  .debug-panel { background: #1a1a2a; border: 0.5px solid #3a3a5a; border-radius: 12px; padding: 12px; margin-top: 1rem; font-size: 11px; font-family: var(--mono); color: #ccc; max-height: 200px; overflow: auto; display: none; }
+  .debug-panel { background: #1a1a2a; border: 0.5px solid #3a3a5a; border-radius: 12px; padding: 12px; margin-top: 1rem; font-size: 11px; font-family: var(--mono); color: #ccc; max-height: 250px; overflow: auto; display: none; }
 </style>
 </head>
 <body>
 <div class="app">
   <div class="header">
-    <div class="header-eyebrow">conciliação offline · testada com seus arquivos</div>
+    <div class="header-eyebrow">conciliação offline · corrigida para GitHub Pages</div>
     <h1>Conciliação Financeira</h1>
-    <p>Envie o arquivo de comandas (Excel) e o extrato (CSV). Tudo local, sem API.</p>
+    <p>Envie comandas (Excel) e extrato (CSV). Agora com parser CSV robusto (PapaParse).</p>
   </div>
 
   <div class="upload-grid">
@@ -120,39 +120,33 @@
     return dados;
   }
 
+  // Leitura de CSV usando PapaParse para garantir robustez
   async function lerExtrato(file) {
-    const text = await file.text();
-    // Parser de CSV manual (simples, respeitando vírgula decimal)
-    const linhas = text.split(/\r?\n/);
-    const resultado = [];
-    const cabecalho = linhas[0].split(',');
-    for (let i = 1; i < linhas.length; i++) {
-      const linha = linhas[i].trim();
-      if (linha === '') continue;
-      const colunas = linha.split(',');
-      if (colunas.length < 9) continue;
-      resultado.push(colunas);
-    }
-    log(`Extrato: ${resultado.length} transações encontradas`);
-    return { cabecalho, dados: resultado };
+    return new Promise((resolve, reject) => {
+      Papa.parse(file, {
+        header: false,
+        skipEmptyLines: true,
+        complete: (results) => {
+          log(`Extrato: ${results.data.length} linhas parseadas`);
+          if (results.errors.length) log(`Erros no parse: ${JSON.stringify(results.errors)}`);
+          resolve({ dados: results.data });
+        },
+        error: (err) => reject(err)
+      });
+    });
   }
 
   // ======================== NORMALIZAÇÃO ========================
   function normalizarValor(valorStr) {
-    if (typeof valorStr !== 'string') valorStr = String(valorStr);
-    // Remove espaços e aspas
-    let limpo = valorStr.replace(/["']/g, '').trim();
-    // Substitui vírgula decimal por ponto, mas mantém separadores de milhar
-    // Ex: "1.234,56" -> "1234.56" ; "72,00" -> "72.00"
-    // Primeiro identifica se a vírgula é decimal (última vírgula)
+    if (valorStr === undefined || valorStr === null) return null;
+    let limpo = String(valorStr).replace(/["']/g, '').trim();
+    // Substitui vírgula decimal por ponto, mas preserva milhar
     const ultimaVirgula = limpo.lastIndexOf(',');
     const ultimoPonto = limpo.lastIndexOf('.');
     if (ultimaVirgula > ultimoPonto) {
-      // vírgula é o separador decimal
-      limpo = limpo.replace(/\./g, ''); // remove pontos de milhar
+      limpo = limpo.replace(/\./g, '');
       limpo = limpo.replace(',', '.');
     } else {
-      // ponto é decimal (ou não tem separador decimal)
       limpo = limpo.replace(/,/g, '');
     }
     const num = parseFloat(limpo);
@@ -162,7 +156,6 @@
   function normalizarData(dataStr) {
     if (!dataStr) return null;
     const str = String(dataStr).trim();
-    // Tenta DD/MM/AAAA HH:MM
     let match = str.match(/(\d{2})\/(\d{2})\/(\d{4})/);
     if (match) return `${match[3]}-${match[2]}-${match[1]}`;
     match = str.match(/(\d{2})\/(\d{2})\/(\d{2})/);
@@ -179,21 +172,19 @@
     return 'Outro';
   }
 
-  // ======================== EXTRAÇÃO DAS COMANDAS ========================
+  // ======================== EXTRAÇÃO COMANDAS ========================
   function extrairComandas(dadosBrutos) {
-    // dadosBrutos é array de arrays (planilha)
     if (dadosBrutos.length < 2) return [];
     const cabecalho = dadosBrutos[0];
-    // Encontrar índices das colunas importantes
-    const idxComanda = cabecalho.findIndex(c => c === 'Comanda');
     const idxStatus = cabecalho.findIndex(c => c === 'Status');
     const idxData = cabecalho.findIndex(c => c === 'Data');
     const idxValor = cabecalho.findIndex(c => c === 'Valor');
     const idxTipoPag = cabecalho.findIndex(c => c === 'Tipo Pagamento');
     const idxCliente = cabecalho.findIndex(c => c === 'Cliente');
+    const idxComanda = cabecalho.findIndex(c => c === 'Comanda');
 
     if (idxStatus === -1 || idxData === -1 || idxValor === -1 || idxTipoPag === -1) {
-      log('Erro: cabeçalho da planilha não encontrado. Colunas esperadas: Status, Data, Valor, Tipo Pagamento');
+      log('Erro: cabeçalho da planilha não encontrado.');
       return [];
     }
 
@@ -215,43 +206,50 @@
       const cliente = linha[idxCliente] || '';
       comandas.push({
         id: comandaId,
-        data,
-        valor,
-        forma,
+        data, valor, forma,
         descricao: `Comanda ${comandaId} - ${cliente}`,
-        raw: linha
       });
     }
     log(`Comandas elegíveis extraídas: ${comandas.length}`);
     return comandas;
   }
 
-  // ======================== EXTRAÇÃO DO EXTRATO ========================
-  function extrairExtrato(extratoObj) {
-    const { cabecalho, dados } = extratoObj;
-    // Índices importantes no CSV: Data e hora (0), Meio - Meio (1), Valor (R$) (8), Status (7)
-    const idxData = 0;
-    const idxMeio = 1;
-    const idxValor = 8;
-    const idxStatus = 7;
+  // ======================== EXTRAÇÃO EXTRATO ========================
+  function extrairExtrato(dadosCSV) {
+    // dadosCSV é array de arrays, cada sub-array é uma linha
+    if (dadosCSV.length === 0) return [];
+    const cabecalho = dadosCSV[0];
+    // Identificar colunas pelos nomes (primeira linha)
+    const idxData = cabecalho.findIndex(c => c && c.includes('Data'));
+    const idxMeio = cabecalho.findIndex(c => c && (c.includes('Meio') || c.includes('meio')));
+    const idxValor = cabecalho.findIndex(c => c && (c.includes('Valor') || c.includes('valor')));
+    const idxStatus = cabecalho.findIndex(c => c && (c.includes('Status') || c.includes('status')));
+
+    // Fallback para índices fixos baseado no CSV exemplo
+    let dataIdx = idxData !== -1 ? idxData : 0;
+    let meioIdx = idxMeio !== -1 ? idxMeio : 1;
+    let valorIdx = idxValor !== -1 ? idxValor : 8;
+    let statusIdx = idxStatus !== -1 ? idxStatus : 7;
+
+    log(`Mapeamento CSV: data=${dataIdx}, meio=${meioIdx}, valor=${valorIdx}, status=${statusIdx}`);
+
     const transacoes = [];
-    for (const linha of dados) {
-      const status = linha[idxStatus] || '';
+    for (let i = 1; i < dadosCSV.length; i++) {
+      const linha = dadosCSV[i];
+      if (linha.length <= Math.max(dataIdx, meioIdx, valorIdx, statusIdx)) continue;
+      const status = String(linha[statusIdx] || '').trim();
       if (status !== 'Aprovada') continue;
-      const dataRaw = linha[idxData];
+      const dataRaw = linha[dataIdx];
       const data = normalizarData(dataRaw);
       if (!data) continue;
-      const meioRaw = linha[idxMeio] || '';
+      const meioRaw = linha[meioIdx];
       let forma = normalizarForma(meioRaw);
-      const valorRaw = linha[idxValor];
+      const valorRaw = linha[valorIdx];
       let valor = normalizarValor(valorRaw);
       if (valor === null) continue;
       transacoes.push({
-        data,
-        valor,
-        forma,
-        descricao: `${meioRaw} - ${linha[2] || ''}`,
-        raw: linha
+        data, valor, forma,
+        descricao: `${meioRaw} - ${linha[2] || ''}`
       });
     }
     log(`Extrato elegível extraído: ${transacoes.length} transações`);
@@ -277,8 +275,7 @@
       }
     }
     return {
-      somaExtrato, somaComandas,
-      conciliados,
+      somaExtrato, somaComandas, conciliados,
       naoConciliadosExtrato: extratoRest,
       naoConciliadosComanda: comandaRest,
       totalExtrato: extrato.length,
@@ -290,18 +287,16 @@
   function gerarRelatorio(comandas, extrato, resultado) {
     const r = resultado;
     const now = new Date().toLocaleString('pt-BR');
-    let md = `# RELATÓRIO DE CONCILIAÇÃO FINANCEIRA\n\n**Data do relatório:** ${now}\n\n**Método:** Offline (data + valor + forma exata)\n\n---\n\n`;
-    md += `## 1. VERIFICAÇÃO MATEMÁTICA INICIAL\n\n`;
-    md += `| Fonte | Transações | Soma (R$) |\n|-------|-----------|----------|\n`;
+    let md = `# RELATÓRIO DE CONCILIAÇÃO FINANCEIRA\n\n**Data:** ${now}\n\n**Método:** Offline (data+valor+forma exata)\n\n---\n\n`;
+    md += `## 1. VERIFICAÇÃO MATEMÁTICA INICIAL\n\n| Fonte | Transações | Soma (R$) |\n|-------|-----------|----------|\n`;
     md += `| Extrato bancário | ${r.totalExtrato} | R$ ${r.somaExtrato.toFixed(2)} |\n`;
-    md += `| Comandas (fechadas, não dinheiro) | ${r.totalComanda} | R$ ${r.somaComandas.toFixed(2)} |\n`;
-    md += `\n**Diferença bruta:** R$ ${(r.somaExtrato - r.somaComandas).toFixed(2)}\n\n`;
+    md += `| Comandas (fechadas, exceto dinheiro) | ${r.totalComanda} | R$ ${r.somaComandas.toFixed(2)} |\n`;
+    md += `\n**Diferença:** R$ ${(r.somaExtrato - r.somaComandas).toFixed(2)}\n\n`;
 
-    md += `## 2. LISTAGEM DAS TRANSAÇÕES EXTRAÍDAS\n\n`;
-    md += `### Extrato (${extrato.length} itens)\n| Data | Valor | Forma | Descrição |\n|------|-------|-------|-----------|\n`;
-    for (let t of extrato.slice(0, 20)) md += `| ${t.data} | R$ ${t.valor.toFixed(2)} | ${t.forma} | ${t.descricao.substring(0, 50)} |\n`;
-    md += `\n### Comandas (${comandas.length} itens)\n| Data | Valor | Forma | Descrição |\n|------|-------|-------|-----------|\n`;
-    for (let t of comandas.slice(0, 20)) md += `| ${t.data} | R$ ${t.valor.toFixed(2)} | ${t.forma} | ${t.descricao.substring(0, 50)} |\n`;
+    md += `## 2. LISTAGEM DAS TRANSAÇÕES EXTRAÍDAS\n\n### Extrato (${extrato.length})\n| Data | Valor | Forma | Descrição |\n|------|-------|-------|-----------|\n`;
+    for (let t of extrato.slice(0,20)) md += `| ${t.data} | R$ ${t.valor.toFixed(2)} | ${t.forma} | ${t.descricao.substring(0,50)} |\n`;
+    md += `\n### Comandas (${comandas.length})\n| Data | Valor | Forma | Descrição |\n|------|-------|-------|-----------|\n`;
+    for (let t of comandas.slice(0,20)) md += `| ${t.data} | R$ ${t.valor.toFixed(2)} | ${t.forma} | ${t.descricao} |\n`;
 
     md += `\n## 3. CONCILIAÇÃO PAR A PAR (${r.conciliados.length} pares)\n\n`;
     if (r.conciliados.length === 0) md += `_Nenhum par conciliado._\n`;
@@ -322,11 +317,10 @@
 
     md += `\n## 6. RESUMO EXECUTIVO\n\n`;
     const perc = r.totalComanda > 0 ? (r.conciliados.length / r.totalComanda * 100).toFixed(1) : 0;
-    md += `- **Taxa de conciliação:** ${perc}%\n`;
-    md += `- **Discrepância total:** R$ ${(r.somaExtrato - r.somaComandas).toFixed(2)}\n\n`;
-    if (Math.abs(r.somaExtrato - r.somaComandas) > 0.01) md += `⚠️ **Atenção:** Existe diferença entre os totais. Verifique os itens não conciliados.\n`;
+    md += `- **Taxa de conciliação:** ${perc}%\n- **Discrepância total:** R$ ${(r.somaExtrato - r.somaComandas).toFixed(2)}\n\n`;
+    if (Math.abs(r.somaExtrato - r.somaComandas) > 0.01) md += `⚠️ Atenção: diferença nos totais. Verifique itens não conciliados.\n`;
     else md += `✅ Os totais batem perfeitamente.\n`;
-    md += `\n---\n*Relatório gerado automaticamente sem uso de API.*\n`;
+    md += `\n---\n*Relatório gerado sem API.*\n`;
     return md;
   }
 
@@ -346,9 +340,9 @@
       const extratoObj = await lerExtrato(state.extrato);
       setStatus('🔍 Extraindo transações...');
       const comandas = extrairComandas(comandasPlanilha);
-      const extrato = extrairExtrato(extratoObj);
+      const extrato = extrairExtrato(extratoObj.dados);
       if (comandas.length === 0 && extrato.length === 0) {
-        throw new Error('Nenhuma transação identificada. Verifique o formato dos arquivos.');
+        throw new Error('Nenhuma transação identificada. Verifique os arquivos.');
       }
       setStatus('⚙️ Conciliando...');
       const resultado = conciliar(extrato, comandas);
@@ -356,7 +350,6 @@
       state.relatorio = relatorio;
       setStatus('', false);
       mostrarRelatorio(relatorio);
-      // Exibir debug
       const debugDiv = document.getElementById('debug-info');
       debugDiv.style.display = 'block';
       debugDiv.innerHTML = `<strong>🔍 Diagnóstico:</strong><br>${state.debugLog.join('<br>')}`;
@@ -431,7 +424,7 @@
   function exportarMD() { if (state.relatorio) download(state.relatorio, `conciliacao_${hoje()}.md`, 'text/markdown'); }
   function exportarTXT() { if (state.relatorio) download(state.relatorio, `conciliacao_${hoje()}.txt`, 'text/plain'); }
   function download(content, nome, tipo) { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([content], {type:tipo})); a.download = nome; a.click(); }
-  function imprimirPDF() { const conteudo = document.getElementById('relatorio-box').innerHTML; const win = window.open('','_blank'); win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Relatório Conciliação</title><style>body{font-family:sans-serif;padding:2rem;} table{border-collapse:collapse;width:100%} th,td{border:1px solid #aaa;padding:5px;} th{background:#eee;}</style></head><body>${conteudo}</body></html>`); win.document.close(); setTimeout(()=>win.print(),500); }
+  function imprimirPDF() { const conteudo = document.getElementById('relatorio-box').innerHTML; const win = window.open('','_blank'); win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Relatório</title><style>body{font-family:sans-serif;padding:2rem;} table{border-collapse:collapse;} th,td{border:1px solid #aaa;padding:5px;}</style></head><body>${conteudo}</body></html>`); win.document.close(); setTimeout(()=>win.print(),500); }
   function hoje() { return new Date().toISOString().slice(0,10); }
   function resetar() {
     ['comandas','extrato'].forEach(t => {
