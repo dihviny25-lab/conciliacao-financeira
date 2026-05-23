@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Conciliação Financeira · Offline (Corrigida)</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --bg: #0e0e10; --surface: #18181c; --surface2: #222228; --border: #2e2e38;
+    --border2: #3d3d4d; --text: #e8e8f0; --text2: #9090a8; --text3: #5a5a70;
+    --accent: #6d6aff; --accent2: #4d4bc5; --green: #22c55e; --green-bg: #0d2318;
+    --green-border: #165a30; --red: #ef4444; --red-bg: #1f0808;
+    --mono: 'IBM Plex Mono', monospace; --sans: 'IBM Plex Sans', sans-serif;
+  }
+  body { background: var(--bg); color: var(--text); font-family: var(--sans); padding: 2rem 1rem; display: flex; justify-content: center; min-height: 100vh; }
+  .app { max-width: 960px; width: 100%; }
+  .header { margin-bottom: 2rem; border-bottom: 0.5px solid var(--border); padding-bottom: 1.25rem; }
+  .header-eyebrow { font-family: var(--mono); font-size: 11px; color: var(--accent); text-transform: uppercase; letter-spacing: 0.12em; margin-bottom: 0.5rem; }
+  .header h1 { font-size: 24px; font-weight: 600; }
+  .header p { font-size: 13px; color: var(--text2); }
+  .upload-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 1.2rem; }
+  .drop-zone { background: var(--surface); border: 1.5px dashed var(--border2); border-radius: 16px; padding: 1.5rem 1rem; text-align: center; cursor: pointer; transition: 0.15s; position: relative; }
+  .drop-zone:hover { border-color: var(--accent); background: #16161e; }
+  .drop-zone.ready { border-color: var(--green-border); background: var(--green-bg); border-style: solid; }
+  .drop-zone input { display: none; }
+  .drop-icon { font-size: 32px; margin-bottom: 8px; }
+  .drop-label { font-weight: 600; font-size: 13px; }
+  .drop-sub { font-size: 11px; font-family: var(--mono); color: var(--text2); }
+  .drop-sub.ok { color: var(--green); }
+  .check-badge { position: absolute; top: 10px; right: 10px; background: var(--green); border-radius: 20px; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; font-size: 11px; color: #000; font-weight: bold; }
+  .btn-primary { width: 100%; background: var(--surface2); border: none; padding: 12px; border-radius: 12px; font-weight: 600; font-size: 14px; color: var(--text3); cursor: pointer; margin-bottom: 1.5rem; transition: 0.2s; }
+  .btn-primary.active { background: var(--accent); color: white; }
+  .btn-primary.active:hover { background: var(--accent2); transform: scale(0.98); }
+  .status-bar { display: none; align-items: center; gap: 12px; background: #131320; border: 0.5px solid #2a2a50; border-radius: 12px; padding: 10px 16px; margin-bottom: 1.5rem; font-size: 13px; color: #b0b0f0; }
+  .spinner { width: 14px; height: 14px; border: 2px solid #2a2a50; border-top-color: var(--accent); border-radius: 50%; animation: spin 0.7s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .resultado { display: none; }
+  .resultado-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 12px; flex-wrap: wrap; gap: 8px; }
+  .resultado-title { font-family: var(--mono); font-size: 12px; color: var(--text2); }
+  .export-btns { display: flex; gap: 8px; }
+  .btn-export { background: var(--surface2); border: 0.5px solid var(--border2); border-radius: 8px; padding: 5px 12px; font-family: var(--mono); font-size: 11px; color: var(--text2); cursor: pointer; }
+  .btn-export:hover { border-color: var(--accent); color: var(--accent); }
+  .relatorio-box { background: var(--surface); border: 0.5px solid var(--border); border-radius: 16px; padding: 1.6rem; max-height: 550px; overflow-y: auto; font-size: 13px; line-height: 1.6; scrollbar-width: thin; }
+  .relatorio-box h1 { font-size: 18px; font-weight: 600; margin: 1rem 0 0.5rem; }
+  .relatorio-box h2 { font-size: 15px; font-weight: 500; margin: 1rem 0 0.5rem; border-left: 3px solid var(--accent); padding-left: 10px; }
+  .relatorio-box table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 11.5px; font-family: var(--mono); }
+  .relatorio-box th, .relatorio-box td { padding: 6px 8px; border: 0.5px solid var(--border2); text-align: left; }
+  .relatorio-box th { background: var(--surface2); font-weight: 500; color: var(--text2); }
+  .btn-reset { background: none; border: none; font-family: var(--mono); font-size: 12px; color: var(--text3); cursor: pointer; margin-top: 0.8rem; display: inline-flex; align-items: center; gap: 6px; }
+  .btn-reset:hover { color: var(--text2); }
+  .error-box { background: var(--red-bg); border: 0.5px solid #ab3a3a; border-radius: 12px; padding: 14px; color: #ff8888; white-space: pre-wrap; }
+  .debug-panel { background: #1a1a2a; border: 0.5px solid #3a3a5a; border-radius: 12px; padding: 12px; margin-top: 1rem; font-size: 11px; font-family: var(--mono); color: #ccc; max-height: 200px; overflow: auto; display: none; }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="header">
+    <div class="header-eyebrow">conciliação offline · testada com seus arquivos</div>
+    <h1>Conciliação Financeira</h1>
+    <p>Envie o arquivo de comandas (Excel) e o extrato (CSV). Tudo local, sem API.</p>
+  </div>
+
+  <div class="upload-grid">
+    <div class="drop-zone" id="drop-comandas" onclick="document.getElementById('input-comandas').click()">
+      <span class="drop-icon">🧾</span>
+      <div class="drop-label">Comandas (XLSX)</div>
+      <div class="drop-sub" id="sub-comandas">Excel</div>
+      <input type="file" id="input-comandas" accept=".xlsx,.xls" onchange="handleFile(this,'comandas')">
+      <span class="check-badge" id="check-comandas" style="display:none">✓</span>
+    </div>
+    <div class="drop-zone" id="drop-extrato" onclick="document.getElementById('input-extrato').click()">
+      <span class="drop-icon">🏦</span>
+      <div class="drop-label">Extrato (CSV)</div>
+      <div class="drop-sub" id="sub-extrato">CSV</div>
+      <input type="file" id="input-extrato" accept=".csv" onchange="handleFile(this,'extrato')">
+      <span class="check-badge" id="check-extrato" style="display:none">✓</span>
+    </div>
+  </div>
+
+  <button class="btn-primary" id="btn-analisar" disabled onclick="iniciarAnalise()">
+    Analisar e conciliar
+  </button>
+
+  <div class="status-bar" id="status-bar">
+    <div class="spinner"></div>
+    <span id="status-texto">Processando...</span>
+  </div>
+
+  <div class="resultado" id="resultado">
+    <div class="resultado-header">
+      <span class="resultado-title">// relatório gerado</span>
+      <div class="export-btns">
+        <button class="btn-export" onclick="exportarMD()">.md</button>
+        <button class="btn-export" onclick="exportarTXT()">.txt</button>
+        <button class="btn-export" onclick="imprimirPDF()">PDF</button>
+      </div>
+    </div>
+    <div class="relatorio-box" id="relatorio-box"></div>
+    <div id="debug-info" class="debug-panel"></div>
+    <button class="btn-reset" onclick="resetar()">↺ Nova conciliação</button>
+  </div>
+</div>
+
+<script>
+  const state = { comandas: null, extrato: null, relatorio: '', debugLog: [] };
+
+  function log(msg) { console.log(msg); state.debugLog.push(msg); }
+
+  // ======================== LEITURA ========================
+  async function lerComandas(file) {
+    const arrayBuffer = await file.arrayBuffer();
+    const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+    const primeiraAba = workbook.Sheets[workbook.SheetNames[0]];
+    const dados = XLSX.utils.sheet_to_json(primeiraAba, { header: 1, defval: "" });
+    log(`Comandas: ${dados.length} linhas lidas (incluindo cabeçalho)`);
+    return dados;
+  }
+
+  async function lerExtrato(file) {
+    const text = await file.text();
+    // Parser de CSV manual (simples, respeitando vírgula decimal)
+    const linhas = text.split(/\r?\n/);
+    const resultado = [];
+    const cabecalho = linhas[0].split(',');
+    for (let i = 1; i < linhas.length; i++) {
+      const linha = linhas[i].trim();
+      if (linha === '') continue;
+      const colunas = linha.split(',');
+      if (colunas.length < 9) continue;
+      resultado.push(colunas);
+    }
+    log(`Extrato: ${resultado.length} transações encontradas`);
+    return { cabecalho, dados: resultado };
+  }
+
+  // ======================== NORMALIZAÇÃO ========================
+  function normalizarValor(valorStr) {
+    if (typeof valorStr !== 'string') valorStr = String(valorStr);
+    // Remove espaços e aspas
+    let limpo = valorStr.replace(/["']/g, '').trim();
+    // Substitui vírgula decimal por ponto, mas mantém separadores de milhar
+    // Ex: "1.234,56" -> "1234.56" ; "72,00" -> "72.00"
+    // Primeiro identifica se a vírgula é decimal (última vírgula)
+    const ultimaVirgula = limpo.lastIndexOf(',');
+    const ultimoPonto = limpo.lastIndexOf('.');
+    if (ultimaVirgula > ultimoPonto) {
+      // vírgula é o separador decimal
+      limpo = limpo.replace(/\./g, ''); // remove pontos de milhar
+      limpo = limpo.replace(',', '.');
+    } else {
+      // ponto é decimal (ou não tem separador decimal)
+      limpo = limpo.replace(/,/g, '');
+    }
+    const num = parseFloat(limpo);
+    return isNaN(num) ? null : num;
+  }
+
+  function normalizarData(dataStr) {
+    if (!dataStr) return null;
+    const str = String(dataStr).trim();
+    // Tenta DD/MM/AAAA HH:MM
+    let match = str.match(/(\d{2})\/(\d{2})\/(\d{4})/);
+    if (match) return `${match[3]}-${match[2]}-${match[1]}`;
+    match = str.match(/(\d{2})\/(\d{2})\/(\d{2})/);
+    if (match) return `20${match[3]}-${match[2]}-${match[1]}`;
+    return null;
+  }
+
+  function normalizarForma(formaStr) {
+    const t = String(formaStr).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    if (t.includes('pix')) return 'PIX';
+    if (t.includes('credito')) return 'Crédito';
+    if (t.includes('debito')) return 'Débito';
+    if (t.includes('dinheiro')) return 'Dinheiro';
+    return 'Outro';
+  }
+
+  // ======================== EXTRAÇÃO DAS COMANDAS ========================
+  function extrairComandas(dadosBrutos) {
+    // dadosBrutos é array de arrays (planilha)
+    if (dadosBrutos.length < 2) return [];
+    const cabecalho = dadosBrutos[0];
+    // Encontrar índices das colunas importantes
+    const idxComanda = cabecalho.findIndex(c => c === 'Comanda');
+    const idxStatus = cabecalho.findIndex(c => c === 'Status');
+    const idxData = cabecalho.findIndex(c => c === 'Data');
+    const idxValor = cabecalho.findIndex(c => c === 'Valor');
+    const idxTipoPag = cabecalho.findIndex(c => c === 'Tipo Pagamento');
+    const idxCliente = cabecalho.findIndex(c => c === 'Cliente');
+
+    if (idxStatus === -1 || idxData === -1 || idxValor === -1 || idxTipoPag === -1) {
+      log('Erro: cabeçalho da planilha não encontrado. Colunas esperadas: Status, Data, Valor, Tipo Pagamento');
+      return [];
+    }
+
+    const comandas = [];
+    for (let i = 1; i < dadosBrutos.length; i++) {
+      const linha = dadosBrutos[i];
+      const status = String(linha[idxStatus] || '').trim();
+      if (status !== 'Fechada') continue;
+      const valorRaw = linha[idxValor];
+      let valor = normalizarValor(valorRaw);
+      if (valor === null || valor === 0) continue;
+      const dataRaw = linha[idxData];
+      const data = normalizarData(dataRaw);
+      if (!data) continue;
+      let formaRaw = linha[idxTipoPag] || '';
+      let forma = normalizarForma(formaRaw);
+      if (forma === 'Dinheiro') continue;
+      const comandaId = linha[idxComanda] || '';
+      const cliente = linha[idxCliente] || '';
+      comandas.push({
+        id: comandaId,
+        data,
+        valor,
+        forma,
+        descricao: `Comanda ${comandaId} - ${cliente}`,
+        raw: linha
+      });
+    }
+    log(`Comandas elegíveis extraídas: ${comandas.length}`);
+    return comandas;
+  }
+
+  // ======================== EXTRAÇÃO DO EXTRATO ========================
+  function extrairExtrato(extratoObj) {
+    const { cabecalho, dados } = extratoObj;
+    // Índices importantes no CSV: Data e hora (0), Meio - Meio (1), Valor (R$) (8), Status (7)
+    const idxData = 0;
+    const idxMeio = 1;
+    const idxValor = 8;
+    const idxStatus = 7;
+    const transacoes = [];
+    for (const linha of dados) {
+      const status = linha[idxStatus] || '';
+      if (status !== 'Aprovada') continue;
+      const dataRaw = linha[idxData];
+      const data = normalizarData(dataRaw);
+      if (!data) continue;
+      const meioRaw = linha[idxMeio] || '';
+      let forma = normalizarForma(meioRaw);
+      const valorRaw = linha[idxValor];
+      let valor = normalizarValor(valorRaw);
+      if (valor === null) continue;
+      transacoes.push({
+        data,
+        valor,
+        forma,
+        descricao: `${meioRaw} - ${linha[2] || ''}`,
+        raw: linha
+      });
+    }
+    log(`Extrato elegível extraído: ${transacoes.length} transações`);
+    return transacoes;
+  }
+
+  // ======================== CONCILIAÇÃO ========================
+  function conciliar(extrato, comandas) {
+    const somaExtrato = extrato.reduce((s, t) => s + t.valor, 0);
+    const somaComandas = comandas.reduce((s, t) => s + t.valor, 0);
+    let extratoRest = [...extrato];
+    let comandaRest = [...comandas];
+    const conciliados = [];
+
+    for (let i = 0; i < extratoRest.length; i++) {
+      const e = extratoRest[i];
+      const idx = comandaRest.findIndex(c => c.data === e.data && Math.abs(c.valor - e.valor) < 0.01 && c.forma === e.forma);
+      if (idx !== -1) {
+        conciliados.push({ extrato: e, comanda: comandaRest[idx] });
+        extratoRest.splice(i, 1);
+        comandaRest.splice(idx, 1);
+        i--;
+      }
+    }
+    return {
+      somaExtrato, somaComandas,
+      conciliados,
+      naoConciliadosExtrato: extratoRest,
+      naoConciliadosComanda: comandaRest,
+      totalExtrato: extrato.length,
+      totalComanda: comandas.length
+    };
+  }
+
+  // ======================== RELATÓRIO ========================
+  function gerarRelatorio(comandas, extrato, resultado) {
+    const r = resultado;
+    const now = new Date().toLocaleString('pt-BR');
+    let md = `# RELATÓRIO DE CONCILIAÇÃO FINANCEIRA\n\n**Data do relatório:** ${now}\n\n**Método:** Offline (data + valor + forma exata)\n\n---\n\n`;
+    md += `## 1. VERIFICAÇÃO MATEMÁTICA INICIAL\n\n`;
+    md += `| Fonte | Transações | Soma (R$) |\n|-------|-----------|----------|\n`;
+    md += `| Extrato bancário | ${r.totalExtrato} | R$ ${r.somaExtrato.toFixed(2)} |\n`;
+    md += `| Comandas (fechadas, não dinheiro) | ${r.totalComanda} | R$ ${r.somaComandas.toFixed(2)} |\n`;
+    md += `\n**Diferença bruta:** R$ ${(r.somaExtrato - r.somaComandas).toFixed(2)}\n\n`;
+
+    md += `## 2. LISTAGEM DAS TRANSAÇÕES EXTRAÍDAS\n\n`;
+    md += `### Extrato (${extrato.length} itens)\n| Data | Valor | Forma | Descrição |\n|------|-------|-------|-----------|\n`;
+    for (let t of extrato.slice(0, 20)) md += `| ${t.data} | R$ ${t.valor.toFixed(2)} | ${t.forma} | ${t.descricao.substring(0, 50)} |\n`;
+    md += `\n### Comandas (${comandas.length} itens)\n| Data | Valor | Forma | Descrição |\n|------|-------|-------|-----------|\n`;
+    for (let t of comandas.slice(0, 20)) md += `| ${t.data} | R$ ${t.valor.toFixed(2)} | ${t.forma} | ${t.descricao.substring(0, 50)} |\n`;
+
+    md += `\n## 3. CONCILIAÇÃO PAR A PAR (${r.conciliados.length} pares)\n\n`;
+    if (r.conciliados.length === 0) md += `_Nenhum par conciliado._\n`;
+    else {
+      md += `| Comanda | Extrato | Status |\n|---------|---------|--------|\n`;
+      for (let p of r.conciliados) {
+        md += `| ${p.comanda.data} R$ ${p.comanda.valor.toFixed(2)} ${p.comanda.forma}<br>${p.comanda.descricao} | ${p.extrato.data} R$ ${p.extrato.valor.toFixed(2)} ${p.extrato.forma}<br>${p.extrato.descricao} | ✅ CONCILIADA |\n`;
+      }
+    }
+
+    md += `\n## 4. COMANDAS NÃO CONCILIADAS (${r.naoConciliadosComanda.length})\n\n`;
+    if (r.naoConciliadosComanda.length === 0) md += `_Nenhuma._\n`;
+    else for (let t of r.naoConciliadosComanda) md += `- ${t.data} R$ ${t.valor.toFixed(2)} ${t.forma} - ${t.descricao}\n`;
+
+    md += `\n## 5. ENTRADAS NÃO CONCILIADAS (${r.naoConciliadosExtrato.length})\n\n`;
+    if (r.naoConciliadosExtrato.length === 0) md += `_Nenhuma._\n`;
+    else for (let t of r.naoConciliadosExtrato) md += `- ${t.data} R$ ${t.valor.toFixed(2)} ${t.forma} - ${t.descricao}\n`;
+
+    md += `\n## 6. RESUMO EXECUTIVO\n\n`;
+    const perc = r.totalComanda > 0 ? (r.conciliados.length / r.totalComanda * 100).toFixed(1) : 0;
+    md += `- **Taxa de conciliação:** ${perc}%\n`;
+    md += `- **Discrepância total:** R$ ${(r.somaExtrato - r.somaComandas).toFixed(2)}\n\n`;
+    if (Math.abs(r.somaExtrato - r.somaComandas) > 0.01) md += `⚠️ **Atenção:** Existe diferença entre os totais. Verifique os itens não conciliados.\n`;
+    else md += `✅ Os totais batem perfeitamente.\n`;
+    md += `\n---\n*Relatório gerado automaticamente sem uso de API.*\n`;
+    return md;
+  }
+
+  // ======================== FLUXO PRINCIPAL ========================
+  async function iniciarAnalise() {
+    const btn = document.getElementById('btn-analisar');
+    btn.disabled = true;
+    btn.classList.remove('active');
+    btn.textContent = '⏳ Processando...';
+    document.getElementById('resultado').style.display = 'none';
+    setStatus('📂 Lendo arquivos...');
+    state.debugLog = [];
+
+    try {
+      if (!state.comandas || !state.extrato) throw new Error('Envie os dois arquivos.');
+      const comandasPlanilha = await lerComandas(state.comandas);
+      const extratoObj = await lerExtrato(state.extrato);
+      setStatus('🔍 Extraindo transações...');
+      const comandas = extrairComandas(comandasPlanilha);
+      const extrato = extrairExtrato(extratoObj);
+      if (comandas.length === 0 && extrato.length === 0) {
+        throw new Error('Nenhuma transação identificada. Verifique o formato dos arquivos.');
+      }
+      setStatus('⚙️ Conciliando...');
+      const resultado = conciliar(extrato, comandas);
+      const relatorio = gerarRelatorio(comandas, extrato, resultado);
+      state.relatorio = relatorio;
+      setStatus('', false);
+      mostrarRelatorio(relatorio);
+      // Exibir debug
+      const debugDiv = document.getElementById('debug-info');
+      debugDiv.style.display = 'block';
+      debugDiv.innerHTML = `<strong>🔍 Diagnóstico:</strong><br>${state.debugLog.join('<br>')}`;
+      btn.disabled = false;
+      btn.classList.add('active');
+      btn.textContent = '✓ Relatório gerado · Nova análise';
+    } catch (err) {
+      setStatus('', false);
+      document.getElementById('resultado').style.display = 'block';
+      document.getElementById('relatorio-box').innerHTML = `<div class="error-box">⚠️ Erro: ${err.message}</div>`;
+      const debugDiv = document.getElementById('debug-info');
+      debugDiv.style.display = 'block';
+      debugDiv.innerHTML = `<strong>🔍 Diagnóstico de erro:</strong><br>${state.debugLog.join('<br>')}`;
+      btn.disabled = false;
+      btn.classList.add('active');
+      btn.textContent = '↺ Tentar novamente';
+    }
+  }
+
+  function setStatus(txt, show = true) {
+    const bar = document.getElementById('status-bar');
+    bar.style.display = show ? 'flex' : 'none';
+    if (txt) document.getElementById('status-texto').textContent = txt;
+  }
+
+  function mostrarRelatorio(md) {
+    document.getElementById('relatorio-box').innerHTML = md2html(md);
+    document.getElementById('resultado').style.display = 'block';
+  }
+
+  function md2html(md) {
+    let html = '';
+    const lines = md.split('\n');
+    let inTable = false, headerRow = false;
+    for (let line of lines) {
+      if (line.startsWith('|')) {
+        if (!inTable) { html += '<table>'; inTable = true; headerRow = true; }
+        const cells = line.split('|').slice(1, -1);
+        if (cells.every(c => /^[-: ]+$/.test(c.trim()))) continue;
+        const tag = headerRow ? 'th' : 'td';
+        html += '<tr>' + cells.map(c => `<${tag}>${c.trim()}</${tag}>`).join('') + '</tr>';
+        if (headerRow) headerRow = false;
+        continue;
+      }
+      if (inTable) { html += '</table>'; inTable = false; }
+      if (/^# /.test(line)) html += `<h1>${line.slice(2)}</h1>`;
+      else if (/^## /.test(line)) html += `<h2>${line.slice(3)}</h2>`;
+      else if (line.trim() === '') html += '<br>';
+      else if (line.startsWith('-')) html += `<p style="margin-left:1rem">• ${line.slice(1)}</p>`;
+      else html += `<p>${line}</p>`;
+    }
+    if (inTable) html += '</table>';
+    return html;
+  }
+
+  function handleFile(input, tipo) {
+    const file = input.files[0];
+    if (!file) return;
+    state[tipo] = file;
+    document.getElementById(`sub-${tipo}`).textContent = file.name;
+    document.getElementById(`sub-${tipo}`).classList.add('ok');
+    document.getElementById(`drop-${tipo}`).classList.add('ready');
+    document.getElementById(`check-${tipo}`).style.display = 'flex';
+    if (state.comandas && state.extrato) {
+      const btn = document.getElementById('btn-analisar');
+      btn.disabled = false;
+      btn.classList.add('active');
+      btn.textContent = '⚡ Analisar e conciliar';
+    }
+  }
+
+  function exportarMD() { if (state.relatorio) download(state.relatorio, `conciliacao_${hoje()}.md`, 'text/markdown'); }
+  function exportarTXT() { if (state.relatorio) download(state.relatorio, `conciliacao_${hoje()}.txt`, 'text/plain'); }
+  function download(content, nome, tipo) { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([content], {type:tipo})); a.download = nome; a.click(); }
+  function imprimirPDF() { const conteudo = document.getElementById('relatorio-box').innerHTML; const win = window.open('','_blank'); win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Relatório Conciliação</title><style>body{font-family:sans-serif;padding:2rem;} table{border-collapse:collapse;width:100%} th,td{border:1px solid #aaa;padding:5px;} th{background:#eee;}</style></head><body>${conteudo}</body></html>`); win.document.close(); setTimeout(()=>win.print(),500); }
+  function hoje() { return new Date().toISOString().slice(0,10); }
+  function resetar() {
+    ['comandas','extrato'].forEach(t => {
+      state[t] = null;
+      document.getElementById(`sub-${t}`).textContent = t === 'comandas' ? 'Excel' : 'CSV';
+      document.getElementById(`sub-${t}`).classList.remove('ok');
+      document.getElementById(`drop-${t}`).classList.remove('ready');
+      document.getElementById(`check-${t}`).style.display = 'none';
+      document.getElementById(`input-${t}`).value = '';
+    });
+    state.relatorio = '';
+    document.getElementById('resultado').style.display = 'none';
+    document.getElementById('debug-info').style.display = 'none';
+    const btn = document.getElementById('btn-analisar');
+    btn.disabled = true;
+    btn.classList.remove('active');
+    btn.textContent = 'Analisar e conciliar';
+  }
+</script>
+</body>
+</html>
